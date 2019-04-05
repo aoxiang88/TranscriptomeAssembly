@@ -1,0 +1,128 @@
+IsoRef
+
+Introduction
+----------------------------------
+IsoRef is a transcriptome assembler that accepts both sequencing data and transcript annotation to infer transcripts accurately, as transcript annotation may provide precise and complementary strutural information that lack in sequencing data. Combine both structural infromation from both sources, IsoRef can build a more accurate splice graph, which leads to precise transcript inferrence. Moreover, after building the splice graph, IsoRef applies a flow-balancing technique for balancing the flows on splice graph so that false positive transcripts are supposed to be diminshed. Finally, IsoRef produces a gtf file that depicts the structure of derived transcripts.
+
+The implementation of IsoRef referred to the StringTie [1] and IBM CPLEX library.
+
+IsoRef was tested on a Centos Linux 7/x86_64 system, users are recommended to install IsoRef in a Centos operating system. Running IsoRef on other Linux operating systems is not guaranteed to work.
+
+[1] Pertea, M., Pertea, G. M., Antonescu, C. M., Chang, T. C., Mendell, J. T., & Salzberg, S. L. (2015). StringTie enables improved reconstruction of a transcriptome from RNA-seq reads. Nature biotechnology, 33(3), 290-295.
+
+
+Dependency
+----------------------------------
+IsoRef depends on the IBM CPLEX library for the linear programming solver.
+
+See more about the IBM ILOG CPLEX Optimization Studio (COS) at 
+	https://www.ibm.com/analytics/data-science/prescriptive-analytics/cplex-optimizer
+
+Follow the instruction about installing CPLEX studio on UNIX, Linux, or Macintosh. Details can be found at:
+https://www.ibm.com/support/knowledgecenter/en/SSSA5P_12.7.0/ilog.odms.studio.help/Optimization_Studio/topics/COS_installing.html
+
+
+Installation
+----------------------------------
+1. Download and unzip IsoRef to a folder, representing as /path/to/IsoRef.
+2. Go to the /path/to/IsoRef, create links to the cplex library and concert library:
+	$ cd /path/to/IsoRef
+	$ ln -s /path/to/CPLEX_studio/cplex/include/ilcplex CPLEX
+	$ ln -s /path/to/CPLEX_studio/concert/include/ilconcert CPLEX-CONCERT
+3. Go to the CPLEX directory, create link to the architecture corresponding to your system(take 64bit Linux for example), do as well to LCONCERT: 
+	$ cd CPLEX
+	$ ln -s /path/to/CPLEX_studio/cplex/lib/x86-64_linux/static_pic static_pic
+	$ cd ../CPLEX-CONCERT
+	$ ln -s	/path/to/CPLEX_studio/concert/lib/x86-64_linux/static_pic static_pic
+4. run Makefile:
+	$ cd ..
+	$ make
+	
+
+Running IsoRef
+-----------------
+
+Run IsoRef from the command line like this:
+
+isoref [options] -i <aligned_reads.bam> -g <reference.gtf/gff>
+
+The main input of the program is a SAMtools BAM file with RNA-Seq mappings
+sorted by genomic location (for example the accepted_hits.bam file produced
+by TopHat).
+
+The following optional parameters can be specified (use -h/--help to get the
+usage message, most parameters are inherited from StringTie, especially the
+parameters of merge mode which is entirely from StringTie):
+  --version : print just the version at stdout and exit
+ -i input sorted bam/sam file (bam/sam) 
+ -g reference annotation to use for guiding the assembly process (GTF/GFF3)
+ --rf assume stranded library fr-firststrand
+ --fr assume stranded library fr-secondstrand
+ -l name prefix for output transcripts (default: IsoRef)
+ -f minimum isoform fraction (default: 0.1)
+ -m minimum assembled transcript length (default: 200)
+ -o output path/file name for the assembled transcripts GTF (default: stdout)
+ -a minimum anchor length for junctions (default: 10)
+ -j minimum junction coverage (default: 1)
+ -t disable trimming of predicted transcripts based on coverage
+    (default: coverage trimming is enabled)
+ -c minimum reads per bp coverage to consider for transcript assembly
+    (default: 2.5)
+ -v verbose (log bundle processing details)
+ -G gap between read mappings triggering a new bundle (default: 50)
+ -C output a file with reference transcripts that are covered by reads
+ -M fraction of bundle allowed to be covered by multi-hit reads (default:0.95)
+ -p number of threads (CPUs) to use (default: 1)
+ -A gene abundance estimation output file
+ -B enable output of Ballgown table files which will be created in the
+    same directory as the output GTF (requires -G, -o recommended)
+ -b enable output of Ballgown table files but these files will be 
+    created under the directory path given as <dir_path>
+ -e only estimate the abundance of given reference transcripts (requires -g)
+ -x do not assemble any transcripts on the given reference sequence(s)
+ -u no multi-mapping correction (default: correction enabled)
+ -h print this usage message and exit
+
+Transcript merge usage mode: 
+  isoref --merge [Options] { gtf_list | isoref1.gtf ...}
+With this option IsoRef will assemble transcripts from multiple
+input files generating a unified non-redundant set of isoforms. In this mode
+the following options are available:
+  -g <guide_gff>   reference annotation to include in the merging (GTF/GFF3)
+  -o <out_gtf>     output file name for the merged transcripts GTF
+                    (default: stdout)
+  -m <min_len>     minimum input transcript length to include in the merge
+                    (default: 50)
+  -c <min_cov>     minimum input transcript coverage to include in the merge
+                    (default: 0)
+  -F <min_fpkm>    minimum input transcript FPKM to include in the merge
+                    (default: 1.0)
+  -T <min_tpm>     minimum input transcript TPM to include in the merge
+                    (default: 1.0)
+  -f <min_iso>     minimum isoform fraction (default: 0.01)
+  -G <gap_len>     gap between transcripts to merge together (default: 250)
+  -I               keep merged transcripts with retained introns; by default
+                   these are not kept unless there is strong evidence for them
+  -l <label>       name prefix for output transcripts (default: MIsoRef)
+
+Input files
+===========
+
+IsoRef takes as input a binary SAM (BAM) file sorted by reference position. 
+This file contains spliced read alignments such as the ones produced by TopHat or HISAT2.
+A text file in SAM format should be converted to BAM and sorted using the 
+samtools program:
+
+samtools view -Su alns.sam | samtools sort - alns.sorted
+
+The file resulted from the above command (alns.sorted.bam) can be used 
+directly as input to StringTie. 
+
+Any SAM spliced read alignment (a read alignment across at least one junction)
+needs to contain the XS tag to indicate the strand from which the RNA that produced
+this read originated. TopHat alignments already include this tag, but if you use
+a different read mapper you should check that this tag is also included for spliced alignment
+records. For example HISAT2 should be run with the `--dta` option in order to tag spliced 
+alignments this way. As explained above, the alignments in SAM format should be sorted and
+preferrably converted to BAM.
+
